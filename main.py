@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import measure
-import nibabel as nib
+import SimpleITK as sitk
 
 class SliceViewer:
     def __init__(self, ct_data, seg_data, dl_data):
@@ -24,11 +24,12 @@ class SliceViewer:
 
     def get_slice(self, data):
         if self.view == 'axial':
-            return data[:, :, self.slice_index]
+            return data[self.slice_index, :, :]
         elif self.view == 'coronal':
             return data[:, self.slice_index, :]
         elif self.view == 'sagittal':
-            return data[self.slice_index, :, :]
+            return data[:, :, self.slice_index]
+            
 
     def update_display(self):
         self.ax.clear()
@@ -49,14 +50,16 @@ class SliceViewer:
         self.ax.set_title(
             f'{self.view.capitalize()} Slice {self.slice_index} | GT [G]: {"On" if self.GTshow_contour else "Off"} | DL [D]: {"On" if self.DLshow_contour else "Off"}'
         )
+        if self.view != 'axial':
+            self.ax.invert_yaxis()
         self.ax.axis('off')
         plt.draw()
 
     def on_scroll(self, event):
         max_index = {
-            'axial': self.ct_data.shape[2],
+            'axial': self.ct_data.shape[0],
             'coronal': self.ct_data.shape[1],
-            'sagittal': self.ct_data.shape[0]
+            'sagittal': self.ct_data.shape[2]
         }[self.view]
 
         if event.button == 'up':
@@ -87,28 +90,31 @@ class SliceViewer:
         current_index = views.index(self.view)
         self.view = views[(current_index + 1) % len(views)]
         self.slice_index = {
-            'axial': self.ct_data.shape[2] // 2,
+            'axial': self.ct_data.shape[0] // 2,
             'coronal': self.ct_data.shape[1] // 2,
-            'sagittal': self.ct_data.shape[0] // 2
+            'sagittal': self.ct_data.shape[2] // 2
         }[self.view]
 
 
-# Load NIfTI files
-root_folder = 'C:/Users/delaOArevaLR/OneDrive - UMCG/Scans/NBIA_4d/Nifti_Selected_DR/108_HM10395/'
-ctname = 'CT_PlanCT_P4^P108^S304^I00008, Gated, 50.0%_ct.nii.gz'
-GTname = 'rtstruct_Tumor_c50.nii.gz'
-DLname = 'itv_RayStation.nii.gz'
-ctpath = root_folder + ctname
-gtpath = root_folder + GTname
-dlpath = root_folder + DLname
+def normalize_image(image, vmin, vmax):
+    return (image - vmin) / (vmax - vmin)
 
-ct_img = nib.load(ctpath)
-gt_img = nib.load(gtpath)
-dl_img  = nib.load(dlpath)
-ct_data = ct_img.get_fdata()
-gt_data = gt_img.get_fdata()
-dl_data = dl_img.get_fdata()
+if __name__ == "__main__":
+    # Example usage
+    root_folder = '//zkh/appdata/RTDicom/Projectline_modelling_lung_cancer/Users/Luis/Sharing/RobinWi/PatientsToReview/4826048/'
+    ctname = "CT_MaxExp_T=50%,PR=44% - 65%,AR()=30 - 81_ct_.nii.gz"
+    GTname = 'RTstructSelected_MaxExp__GTVklieren.nii.gz'
+    DLname = 'GTV50_DLContour.nii.gz'
+    ctpath = root_folder + ctname
+    gtpath = root_folder + GTname
+    dlpath = root_folder + DLname
 
-# Launch the viewer
-viewer = SliceViewer(ct_data, gt_data,dl_data)
-plt.show()
+    ct_data = sitk.GetArrayFromImage(sitk.ReadImage(ctpath))
+    gt_data = sitk.GetArrayFromImage(sitk.ReadImage(gtpath))
+    dl_data  = sitk.GetArrayFromImage(sitk.ReadImage(dlpath))
+    ct_data = normalize_image(ct_data, vmin=-1024, vmax=600)
+
+
+    # Launch the viewer
+    viewer = SliceViewer(ct_data, gt_data,dl_data)
+    plt.show()
