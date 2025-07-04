@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage import measure
 import SimpleITK as sitk
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
 class SliceViewer:
     def __init__(self, ct_data, seg_data, dl_data):
@@ -10,15 +12,17 @@ class SliceViewer:
         self.dl_data = dl_data
 
         self.view = 'axial'  # 'axial', 'coronal', or 'sagittal'
-        self.slice_index = ct_data.shape[2] // 2
+        self.slice_index = ct_data.shape[0] // 2
 
         self.GTshow_contour = True
         self.DLshow_contour = True
+        self.secondImage_cmap = 'rainbow'
 
         self.fig, self.ax = plt.subplots()
         self.fig.canvas.mpl_connect('scroll_event', self.on_scroll)
         self.fig.canvas.mpl_connect('button_press_event', self.on_click)
         self.fig.canvas.mpl_connect('key_press_event', self.on_key)
+
 
         self.update_display()
 
@@ -45,11 +49,11 @@ class SliceViewer:
         if self.DLshow_contour:
             dl_slice = self.get_slice(self.dl_data)
             masked_dl = np.ma.masked_where(dl_slice == 0, dl_slice)
-            self.ax.imshow(masked_dl, cmap='rainbow', alpha=0.5)
+            self.ax.imshow(masked_dl, cmap=self.secondImage_cmap, alpha=0.5)
 
-        self.ax.set_title(
-            f'{self.view.capitalize()} Slice {self.slice_index} | GT [G]: {"On" if self.GTshow_contour else "Off"} | DL [D]: {"On" if self.DLshow_contour else "Off"}'
-        )
+
+        self.ax.set_title(f"{self.view.capitalize()} Slice {self.slice_index} | GT [g]: {'On' if self.GTshow_contour else 'Off'} | DL [d]: {'On' if self.DLshow_contour else 'Off'} | Colormap [m]: {'P map' if self.secondImage_cmap == 'rainbow' else 'PET'}")
+
         if self.view != 'axial':
             self.ax.invert_yaxis()
         self.ax.axis('off')
@@ -83,6 +87,9 @@ class SliceViewer:
             self.DLshow_contour = not self.DLshow_contour
         elif event.key == 'v':
             self.toggle_view()
+        elif event.key == 'm':
+            self.secondImage_cmap = 'hot' if self.secondImage_cmap == 'rainbow' else 'rainbow'
+
         self.update_display()
 
     def toggle_view(self):
@@ -99,22 +106,44 @@ class SliceViewer:
 def normalize_image(image, vmin, vmax):
     return (image - vmin) / (vmax - vmin)
 
-if __name__ == "__main__":
-    # Example usage
-    root_folder = '//zkh/appdata/RTDicom/Projectline_modelling_lung_cancer/Users/Luis/Sharing/RobinWi/PatientsToReview/4826048/'
-    ctname = "CT_MaxExp_T=50%,PR=44% - 65%,AR()=30 - 81_ct_.nii.gz"
-    GTname = 'RTstructSelected_MaxExp__GTVklieren.nii.gz'
-    DLname = 'GTV50_DLContour.nii.gz'
-    ctpath = root_folder + ctname
-    gtpath = root_folder + GTname
-    dlpath = root_folder + DLname
+def main():
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("SliceViewer Instructions","🧠 SliceViewer Controls:\n\n""- Scroll or ↑/↓: Navigate slices\n"
+                        "- g: Toggle Ground Truth contours\n"
+                        "- d: Toggle DL segmentation overlay\n"
+                        "- v: Switch view (Axial / Coronal / Sagittal)\n"
+                        "- m: Switch colormap (Rainbow (Probability Map) / Hot (PET))\n"
+                        "- Mouse Click: Toggle GT contours\n\n"
+                        "You will now be asked to select 3 image files:\n"
+                        "1. CT scan\n"
+                        "2. Ground Truth segmentation\n"
+                        "3. DL segmentation\n\n")
+    
+    #init_dir = "//zkh/appdata/RTDicom/Projectline_modelling_lung_cancer/Users/Luis/Sharing/RobinWi/PatientsToReview/"
 
-    ct_data = sitk.GetArrayFromImage(sitk.ReadImage(ctpath))
-    gt_data = sitk.GetArrayFromImage(sitk.ReadImage(gtpath))
-    dl_data  = sitk.GetArrayFromImage(sitk.ReadImage(dlpath))
-    ct_data = normalize_image(ct_data, vmin=-1024, vmax=600)
+    #ct_path = filedialog.askopenfilename(title="Select CT Data", initialdir=init_dir,filetypes=[("All files", "*.*")])
+    #seg_path = filedialog.askopenfilename(title="Select Ground Truth Segmentation", initialdir=init_dir,filetypes=[("All files", "*.*")])
+    #dl_path = filedialog.askopenfilename(title="Select DL Segmentation", initialdir=init_dir,filetypes=[("All files", "*.*")])
+    ct_path = filedialog.askopenfilename(title="Select CT Data", filetypes=[("All files", "*.*")])
+    seg_path = filedialog.askopenfilename(title="Select Ground Truth Segmentation", filetypes=[("All files", "*.*")])
+    dl_path = filedialog.askopenfilename(title="Select DL Segmentation", filetypes=[("All files", "*.*")])
 
+    if not ct_path or not seg_path or not dl_path:
+        messagebox.showerror("Error", "All three files must be selected.")
+        return
 
-    # Launch the viewer
-    viewer = SliceViewer(ct_data, gt_data,dl_data)
+    ct_data = sitk.GetArrayFromImage(sitk.ReadImage(ct_path))
+    seg_data = sitk.GetArrayFromImage(sitk.ReadImage(seg_path))
+    dl_data = sitk.GetArrayFromImage(sitk.ReadImage(dl_path))
+
+    if ct_data.shape != seg_data.shape or ct_data.shape != dl_data.shape:
+        messagebox.showerror("Error", "All input arrays must have the same shape.")
+        return
+
+    viewer = SliceViewer(ct_data, seg_data, dl_data)
     plt.show()
+
+
+if __name__ == "__main__":
+    main()
